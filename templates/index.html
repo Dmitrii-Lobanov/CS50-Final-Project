@@ -1,0 +1,112 @@
+<html>
+	<head>
+		<link rel="stylesheet" href="/static/todomvc-app-css/index.css" />
+		<title>Realtime ToDo List</title>
+	</head>
+
+	<body>
+		<section class="todoapp">
+			<header class="header">
+				<h1>Todos</h1>
+				<input
+					class="new-todo"
+					placeholder="What needs to be done?"
+					autofocus=""
+					onkeypress="addItem(event)"
+				/>
+			</header>
+
+			<section class="main">
+				<ul class="todo-list"></ul>
+			</section>
+
+			<footer class="footer"></footer>
+		</section>
+
+		<script>
+			// Function that makes API call to add an item
+			function addItem(e) {
+				// If enter key is pressed on the form input, add new item
+				if (e.which == 13 || e.keyCode == 13) {
+					let item = document.querySelector(".new-todo");
+					fetch("/add-todo", {
+						method: "post",
+						body: JSON.stringify({
+							id: `item-${Date.now()}`,
+							value: item.value,
+							completed: 0
+						})
+					}).then(resp => {
+						item.value = "";
+					});
+				}
+			}
+
+			// Function that makes API call to remove an item
+			function removeItem(id) {
+				fetch(`/remove-todo/${id}`);
+			}
+
+			// Function that makes API call to update an item
+			function toggleComplete(e) {
+				let id = e.dataset.id,
+					completed = e.dataset.completed == "1" ? "0" : "1";
+				fetch(`/update-todo/${id}`, {
+					method: "post",
+					body: JSON.stringify({ completed })
+				});
+			}
+
+			// Helper function to append new todo item to current todo list
+			function appendToList(data) {
+				let html = `
+          <li id="${data.id}">
+            <div class="view">
+              <input class="toggle" type="checkbox" onclick="toggleComplete(this)" data-completed="${
+								data.completed
+							}" data-id="${data.id}">
+              <label>${data.value}</label>
+              <button class="destroy" onclick="removeItem('${
+								data.id
+							}')"></button>
+            </div>
+          </li>`;
+				let list = document.querySelector(".todo-list");
+				list.innerHTML += html;
+			}
+		</script>
+
+		<script src="https://js.pusher.com/4.1/pusher.min.js"></script>
+
+		<script>
+			// Configure pusher
+			const pusher = new Pusher("25860c8518b767230f19", {
+				cluster: "eu",
+				encrypted: true
+			});
+
+			// subscribe to todo public channel
+			const channel = pusher.subscribe("todo");
+
+			// Listen for item-added events, and update todo list once event triggered
+			channel.bind("item-added", data => {
+				appendToList(data);
+			});
+
+			// Listen for item-removed events
+			channel.bind("item-removed", data => {
+				let item = document.querySelector(`#${data.id}`);
+				item.parentNode.removeChild(item);
+			});
+
+			// Listen for item-updated events
+			channel.bind("item-updated", data => {
+				let elem = document.querySelector(`#${data.id}.toggle`);
+				let item = document.querySelector(`#${data.id}`);
+				item.classList.toggle("completed");
+				elem.dataset.completed = data.completed;
+				elem.checked = data.completed == 1;
+			});
+		</script>
+	</body>
+</html>
